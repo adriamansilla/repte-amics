@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>¿Cuánto me conoces? - El Reto</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(-45deg, #bae6fd, #fbcfe8, #ddd6fe, #bbf7d0);
+            background-size: 300% 300%;
+            animation: gradientBG 9s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen text-slate-800 flex flex-col items-center justify-center p-3 sm:p-4">
+
+    <!-- Contenidor Central Mòbil -->
+    <main class="w-full max-w-md mx-auto" id="app">
+        <!-- El contingut canvia dinàmicament -->
+    </main>
+
+    <script>
+        // 1. CONFIGURACIÓ SUPABASE
+        const SUPABASE_URL = "https://kugscimolzccvdoymknx.supabase.co";
+        const SUPABASE_KEY = "sb_publishable_NKlEEmVxCnGs-vgc6Aeg3Q_K1gk7NNs"; // Posa la teva clau anon de Supabase
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // 2. SISTEMA D'ÀUDIO WEB PER AL CLIC (Sense necessitat de fitxers externs)
+        function playClickSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.05);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
+            } catch (e) {
+                // En cas que l'àudio estigui bloquejat pel navegador
+            }
+        }
+
+        // 3. BANC DE 20 PREGUNTES AMB IL·LUSTRACIONS
+        const ALL_QUESTIONS = [
+            {
+                id: 1,
+                question: "¿Qué serie o dibujos elegiría {nom} para ver ahora?",
+                options: [
+                    { id: "A", label: "Doraemon", icon: "🐱🔔", bg: "bg-blue-100" },
+                    { id: "B", label: "Phineas y Ferb", icon: "🚀🏖️", bg: "bg-amber-100" },
+                    { id: "C", label: "Bob Esponja", icon: "🍍🧽", bg: "bg-yellow-100" },
+                    { id: "D", label: "Dragon Ball", icon: "🐉🥋", bg: "bg-orange-100" },
+                    { id: "E", label: "Shin-chan", icon: "🍫🐘", bg: "bg-red-100" },
+                    { id: "F", label: "Pokémon", icon: "⚡🎒", bg: "bg-yellow-50" },
+                    { id: "G", label: "Los Simpson", icon: "🍩📺", bg: "bg-amber-50" },
+                    { id: "H", label: "Miraculous", icon: "🐞🗼", bg: "bg-rose-100" }
+                ]
+            },
+            {
+                id: 2,
+                question: "¿Cómo duerme {nom} habitualmente?",
+                options: [
+                    { id: "A", label: "Lado izquierdo de la cama", icon: "🛌⬅️", bg: "bg-indigo-50" },
+                    { id: "B", label: "Lado derecho de la cama", icon: "🛌➡️", bg: "bg-sky-50" },
+                    { id: "C", label: "Boca abajo (la croqueta)", icon: "🔄💤", bg: "bg-emerald-50" },
+                    { id: "D", label: "Abrazando la almohada", icon: "🧸😴", bg: "bg-pink-50" },
+                    { id: "E", label: "Boca arriba como una momia", icon: "🗿🛌", bg: "bg-slate-100" },
+                    { id: "F", label: "Tirado/a en diagonal", icon: "📐😴", bg: "bg-purple-50" }
+                ]
+            },
+            {
+                id: 3,
+                question: "¿A qué hora y cómo suena la alarma de {nom}?",
+                options: [
+                    { id: "A", label: "A la 1ª salta de la cama", icon: "⏰⚡", bg: "bg-emerald-100" },
+                    { id: "B", label: "Tiene 6 alarmas cada 5 min", icon: "📱🔁", bg: "bg-rose-100" },
+                    { id: "C", label: "Se despierta antes que suene", icon: "👀🌅", bg: "bg-amber-100" },
+                    { id: "D", label: "Le tienen que sacudir para levantarse", icon: "📢🛏️", bg: "bg-orange-100" },
+                    { id: "E", label: "Apaga la alarma y se vuelve a dormir", icon: "😴❌", bg: "bg-red-100" },
+                    { id: "F", label: "No usa alarma, despierta solo/a", icon: "🕊️⏰", bg: "bg-teal-100" }
+                ]
+            },
+            {
+                id: 4,
+                question: "¿En qué se gasta {nom} la mayor parte del dinero?",
+                options: [
+                    { id: "A", label: "Hamburguesas y comida rápida", icon: "🍔🍟", bg: "bg-amber-100" },
+                    { id: "B", label: "Bambas o ropa nueva", icon: "👟👕", bg: "bg-blue-100" },
+                    { id: "C", label: "Videojuegos, pases o skins", icon: "🎮👾", bg: "bg-purple-100" },
+                    { id: "D", label: "Chuches y meriendas de quiosco", icon: "🍬🧃", bg: "bg-pink-100" },
+                    { id: "E", label: "Lo ahorra todo en la hucha", icon: "🐖💰", bg: "bg-emerald-100" },
+                    { id: "F", label: "Cosas de tecnología / accesorios", icon: "🎧🔋", bg: "bg-slate-100" }
+                ]
+            },
+            {
+                id: 5,
+                question: "¿Qué chuches o snacks elegiría {nom}?",
+                options: [
+                    { id: "A", label: "Chuches ácidas que pican mucho", icon: "🍋👅", bg: "bg-lime-100" },
+                    { id: "B", label: "Chocolate / Nutella / Bombones", icon: "🍫🍩", bg: "bg-amber-100" },
+                    { id: "C", label: "Nubes de azúcar y gominolas", icon: "☁️🍓", bg: "bg-pink-100" },
+                    { id: "D", label: "Patatas fritas / Doritos salados", icon: "🍟🧂", bg: "bg-yellow-100" },
+                    { id: "E", label: "Regaliz rojo o negro", icon: "🥢🍬", bg: "bg-red-100" },
+                    { id: "F", label: "Chicles de sabores y piruletas", icon: "🍭🫧", bg: "bg-sky-100" }
+                ]
+            },
+            {
+                id: 6,
+                question: "¿Dónde solía sentarse {nom} en clase?",
+                options: [
+                    { id: "A", label: "Primera fila (al lado del profe)", icon: "🧑‍🏫📏", bg: "bg-blue-100" },
+                    { id: "B", label: "Al fondo del todo", icon: "🚪🕶️", bg: "bg-slate-100" },
+                    { id: "C", label: "Al lado de la ventana soñando", icon: "🪟☁️", bg: "bg-sky-100" },
+                    { id: "D", label: "En medio para no llamar la atención", icon: "🎯🪑", bg: "bg-emerald-100" },
+                    { id: "E", label: "Cerca de su mejor amigo/a siempre", icon: "🫂👥", bg: "bg-pink-100" },
+                    { id: "F", label: "Donde le obligaba el profesor/a", icon: "👉📋", bg: "bg-orange-100" }
+                ]
+            },
+            {
+                id: 7,
+                question: "¿Cómo suele escribir {nom} por WhatsApp?",
+                options: [
+                    { id: "A", label: "Audios de 3 minutos como un podcast", icon: "🎙️📻", bg: "bg-purple-100" },
+                    { id: "B", label: "Monosílabos: 'ok', 'si', 'k'", icon: "💬😶", bg: "bg-slate-100" },
+                    { id: "C", label: "Envía 10 mensajes seguidos de una palabra", icon: "📲💥", bg: "bg-sky-100" },
+                    { id: "D", label: "Te deja en visto durante 6 horas", icon: "👀⏳", bg: "bg-blue-100" },
+                    { id: "E", label: "Responde en 2 segundos siempre", icon: "⚡📱", bg: "bg-emerald-100" },
+                    { id: "F", label: "Solo contesta con stickers y memes", icon: "🎭🐸", bg: "bg-amber-100" }
+                ]
+            },
+            {
+                id: 8,
+                question: "¿A qué juego le ha echado más horas {nom}?",
+                options: [
+                    { id: "A", label: "Minecraft (construcción / survival)", icon: "🧱⛏️", bg: "bg-emerald-100" },
+                    { id: "B", label: "Roblox (todos los modos)", icon: "🤖🌐", bg: "bg-red-100" },
+                    { id: "C", label: "Brawl Stars / Clash Royale", icon: "🥊⭐", bg: "bg-amber-100" },
+                    { id: "D", label: "Mario Bros / Mario Kart / Switch", icon: "🍄🏎️", bg: "bg-rose-100" },
+                    { id: "E", label: "Fortnite / Shooters", icon: "🪂🔫", bg: "bg-indigo-100" },
+                    { id: "F", label: "FIFA / EA FC en consola", icon: "⚽🎮", bg: "bg-green-100" },
+                    { id: "G", label: "Partidillos en la calle con amigos", icon: "🏀👟", bg: "bg-orange-100" }
+                ]
+            },
+            {
+                id: 9,
+                question: "¿Qué suele hacer {nom} un viernes por la tarde?",
+                options: [
+                    { id: "A", label: "Sofá, manta y móvil sin moverse", icon: "🛋️📱", bg: "bg-indigo-100" },
+                    { id: "B", label: "Quedar en la plaza/calle con amigos", icon: "🏙️🚶", bg: "bg-amber-100" },
+                    { id: "C", label: "Entrenamiento o partido de deporte", icon: "🏀🏃", bg: "bg-orange-100" },
+                    { id: "D", label: "Viciar a la consola / PC hasta las tantas", icon: "🎧🖥️", bg: "bg-purple-100" },
+                    { id: "E", label: "Ir al cine o centro comercial", icon: "🍿🏬", bg: "bg-rose-100" },
+                    { id: "F", label: "Dormir una siesta interminable", icon: "🛌💤", bg: "bg-teal-100" }
+                ]
+            },
+            {
+                id: 10,
+                question: "¿Cuál es la mejor época o fiesta del año para {nom}?",
+                options: [
+                    { id: "A", label: "Su cumpleaños (fiesta y regalos)", icon: "🎂🎁", bg: "bg-pink-100" },
+                    { id: "B", label: "Navidad y Reyes (vacaciones de invierno)", icon: "🎄🎅", bg: "bg-emerald-100" },
+                    { id: "C", label: "Verano (piscina, playa y sin clases)", icon: "🏖️🍉", bg: "bg-amber-100" },
+                    { id: "D", label: "Halloween / Castañada", icon: "🎃🍬", bg: "bg-orange-100" },
+                    { id: "E", label: "Fin de Año / Fiestas del pueblo", icon: "🎆🎉", bg: "bg-purple-100" },
+                    { id: "F", label: "Semana Santa / Puente largo", icon: "🐣⛺", bg: "bg-sky-100" }
+                ]
+            },
+            {
+                id: 11,
+                question: "¿Cómo estudia {nom} para los exámenes?",
+                options: [
+                    { id: "A", label: "Días antes con resúmenes perfectos", icon: "📚✍️", bg: "bg-emerald-100" },
+                    { id: "B", label: "La tarde de antes con nervios", icon: "⚡☕", bg: "bg-amber-100" },
+                    { id: "C", label: "Repasa 10 minutos antes de entrar", icon: "⏱️🚪", bg: "bg-orange-100" },
+                    { id: "D", label: "Con lo que recuerda de clase y suerte", icon: "🎲🍀", bg: "bg-purple-100" },
+                    { id: "E", label: "Estudiando mientras escucha música", icon: "🎧📖", bg: "bg-sky-100" },
+                    { id: "F", label: "Haciendo videollamada con amigos", icon: "📞👥", bg: "bg-rose-100" }
+                ]
+            },
+            {
+                id: 12,
+                question: "¿Qué le da más pánico de verdad a {nom}?",
+                options: [
+                    { id: "A", label: "Arañas, avispas o bichos raros", icon: "🕷️🐝", bg: "bg-amber-100" },
+                    { id: "B", label: "Películas de terror / Casas oscuras", icon: "👻🏚️", bg: "bg-purple-100" },
+                    { id: "C", label: "Quedarse al 1% de batería en la calle", icon: "🪫😱", bg: "bg-red-100" },
+                    { id: "D", label: "Que el profe diga: 'Examen sorpresa'", icon: "📝😨", bg: "bg-orange-100" },
+                    { id: "E", label: "Las alturas o atracciones extremas", icon: "🎢⛰️", bg: "bg-sky-100" },
+                    { id: "F", label: "Hacer el ridículo delante de mucha gente", icon: "😳🎤", bg: "bg-rose-100" }
+                ]
+            },
+            {
+                id: 13,
+                question: "¿Cuál es el postre irresistible para {nom}?",
+                options: [
+                    { id: "A", label: "Helado artesano de tarrina", icon: "🍨🍦", bg: "bg-sky-100" },
+                    { id: "B", label: "Coulant de chocolate con centro fundido", icon: "🌋🍫", bg: "bg-amber-100" },
+                    { id: "C", label: "Crepe o gofre gigante con Nutella", icon: "🧇🍓", bg: "bg-yellow-100" },
+                    { id: "D", label: "Tarta de queso (Cheesecake)", icon: "🍰🧀", bg: "bg-amber-50" },
+                    { id: "E", label: "Churros con chocolate caliente", icon: "🥖☕", bg: "bg-orange-100" },
+                    { id: "F", label: "Prefiere saltarse el postre y tomar fruta", icon: "🍏🥝", bg: "bg-emerald-100" }
+                ]
+            },
+            {
+                id: 14,
+                question: "¿Cómo reacciona {nom} si tropieza y cae en público?",
+                options: [
+                    { id: "A", label: "Se parte de risa en el propio suelo", icon: "🤣🕳️", bg: "bg-yellow-100" },
+                    { id: "B", label: "Mira de reojo a ver si alguien lo ha visto", icon: "👀🤫", bg: "bg-blue-100" },
+                    { id: "C", label: "Se pone rojo/a como un tomate al segundo", icon: "🍅😳", bg: "bg-red-100" },
+                    { id: "D", label: "Disimula como si estuviera bailando", icon: "🕺✨", bg: "bg-purple-100" },
+                    { id: "E", label: "Se levanta a la velocidad de la luz", icon: "⚡🏃", bg: "bg-emerald-100" },
+                    { id: "F", label: "Echa la culpa al suelo o a las baldosas", icon: "🧱😡", bg: "bg-slate-100" }
+                ]
+            },
+            {
+                id: 15,
+                question: "¿Qué superpoder secreto define mejor a {nom}?",
+                options: [
+                    { id: "A", label: "Saber datos aleatorios que nadie sabe", icon: "🧠🔍", bg: "bg-indigo-100" },
+                    { id: "B", label: "Dormir 12 horas seguidas del tirón", icon: "🛌💤", bg: "bg-teal-100" },
+                    { id: "C", label: "Llegar siempre 5 minutos tarde a todo", icon: "🏃⏰", bg: "bg-rose-100" },
+                    { id: "D", label: "Tener el meme perfecto para cada momento", icon: "🐸📱", bg: "bg-emerald-100" },
+                    { id: "E", label: "Improvisar excusas creíbles al instante", icon: "🎭✨", bg: "bg-amber-100" },
+                    { id: "F", label: "Puntería de precisión en baloncesto/deporte", icon: "🎯🏀", bg: "bg-orange-100" }
+                ]
+            },
+            {
+                id: 16,
+                question: "¿Qué haría {nom} con 100€ de premio en la mano?",
+                options: [
+                    { id: "A", label: "Invitar a una merendola a sus amigos", icon: "🍕👥", bg: "bg-emerald-100" },
+                    { id: "B", label: "Comprar la ropa que tenía en la cesta", icon: "🛍️👟", bg: "bg-pink-100" },
+                    { id: "C", label: "Guardarlo todo en su cuenta/hucha", icon: "🔒💰", bg: "bg-sky-100" },
+                    { id: "D", label: "En 3 días ya no sabe dónde ha ido", icon: "💸🤷", bg: "bg-amber-100" },
+                    { id: "E", label: "Skins, pases de batalla o juegos", icon: "🎮⭐", bg: "bg-purple-100" },
+                    { id: "F", label: "Ahorrarlo para un viaje futuro", icon: "✈️🎒", bg: "bg-teal-100" }
+                ]
+            },
+            {
+                id: 17,
+                question: "¿Qué comida rápida definitiva prefiere {nom}?",
+                options: [
+                    { id: "A", label: "Pizza barbacoa o 4 quesos", icon: "🍕🧀", bg: "bg-amber-100" },
+                    { id: "B", label: "Hamburguesa doble con queso y patatas", icon: "🍔🍟", bg: "bg-orange-100" },
+                    { id: "C", label: "Kebab completo con salsa blanca", icon: "🌯🥙", bg: "bg-yellow-100" },
+                    { id: "D", label: "Platazo gigante de pasta carbonara", icon: "🍝🧀", bg: "bg-red-100" },
+                    { id: "E", label: "Tacos mexicanos o burritos", icon: "🌮🥑", bg: "bg-emerald-100" },
+                    { id: "F", label: "Sushi variado", icon: "🍣🥢", bg: "bg-rose-100" }
+                ]
+            },
+            {
+                id: 18,
+                question: "¿Qué plan prefiere {nom} en una tarde libre?",
+                options: [
+                    { id: "A", label: "Cine con palomitas dulces", icon: "🍿🎬", bg: "bg-purple-100" },
+                    { id: "B", label: "Pachanga de fútbol o baloncesto", icon: "🏀⚽", bg: "bg-orange-100" },
+                    { id: "C", label: "Tarde de compras y dar vueltas", icon: "🛍️🏬", bg: "bg-pink-100" },
+                    { id: "D", label: "Charlar en un parque o plaza", icon: "🌳🥤", bg: "bg-emerald-100" },
+                    { id: "E", label: "Torneo de videojuegos en casa", icon: "🎮👾", bg: "bg-blue-100" },
+                    { id: "F", label: "Ver series en casa sin salir", icon: "📺🛋️", bg: "bg-slate-100" }
+                ]
+            },
+            {
+                id: 19,
+                question: "¿Cómo reacciona {nom} cuando le cuentan un cotilleo fuerte?",
+                options: [
+                    { id: "A", label: "'¡No me lo creo! ¡Cuéntamelo TODO ya!'", icon: "😱📣", bg: "bg-yellow-100" },
+                    { id: "B", label: "Ya se lo sabía desde hace dos días", icon: "😏🕶️", bg: "bg-blue-100" },
+                    { id: "C", label: "Se queda en shock con los ojos como platos", icon: "😳💥", bg: "bg-red-100" },
+                    { id: "D", label: "Le da completamente igual y cambia de tema", icon: "🥱👋", bg: "bg-slate-100" },
+                    { id: "E", label: "Promete guardar el secreto de por vida", icon: "🤐🤞", bg: "bg-emerald-100" },
+                    { id: "F", label: "Comienza a buscar más pruebas al instante", icon: "🕵️🔎", bg: "bg-purple-100" }
+                ]
+            },
+            {
+                id: 20,
+                question: "¿Cuál es la bebida favorita de {nom}?",
+                options: [
+                    { id: "A", label: "Agua fría (siempre bien hidratado/a)", icon: "💧🧊", bg: "bg-sky-100" },
+                    { id: "B", label: "Refresco de cola o naranja", icon: "🥤🍊", bg: "bg-amber-100" },
+                    { id: "C", label: "Bebida energética fría", icon: "⚡🥫", bg: "bg-blue-100" },
+                    { id: "D", label: "Té helado de limón o melocotón", icon: "🧋🍋", bg: "bg-yellow-100" },
+                    { id: "E", label: "Batido de chocolate o fresa", icon: "🥛🍓", bg: "bg-pink-100" },
+                    { id: "F", label: "Zumo natural exprimido", icon: "🍹🍍", bg: "bg-orange-100" }
+                ]
+            }
+        ];
+
+        const TARGET_QUESTIONS = 10;
+
+        // ESTAT DE L'APLICACIÓ
+        const urlParams = new URLSearchParams(window.location.search);
+        const quizId = urlParams.get('id');
+        const refId = urlParams.get('ref');
+
+        let state = {
+            step: 'home', // home, creator_quiz, share_dashboard, friend_intro, friend_quiz, result, scoreboard
+            userName: '',
+            gender: 'chico',
+            friendName: '',
+            currentQuestionIdx: 0,
+            availableQuestions: [],
+            creatorAnswers: {},
+            friendAnswers: {},
+            friendAnsweredQuestions: [],
+            createdQuizId: '',
+            targetQuiz: null,
+            score: 0
+        };
+
+        const app = document.getElementById('app');
+
+        function shuffleArray(list) {
+            return [...list].sort(() => 0.5 - Math.random());
+        }
+
+        async function init() {
+            if (quizId) {
+                // L'amic entra des d'un enllaç de WhatsApp
+                const { data, error } = await db.from('quizzes').select('*').eq('id', quizId).single();
+                if (data) {
+                    state.targetQuiz = data;
+                    state.friendAnsweredQuestions = ALL_QUESTIONS.filter(q => data.answers.hasOwnProperty(q.id));
+                    state.step = 'friend_intro';
+                    render();
+                } else {
+                    alert('Test no trobat');
+                    state.step = 'home';
+                    render();
+                }
+            } else {
+                render();
+            }
+        }
+
+        function render() {
+            if (state.step === 'home') {
+                app.innerHTML = `
+          <div class="glass-card p-6 rounded-3xl shadow-xl text-center space-y-5">
+            <div class="w-20 h-20 bg-sky-400/20 text-sky-500 rounded-2xl mx-auto flex items-center justify-center text-4xl shadow-inner">
+              🎯
+            </div>
+            <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">¿Quién te conoce mejor?</h1>
+            <p class="text-xs text-slate-500">Responde 10 preguntas y comparte tu reto para poner a prueba a tus amigos.</p>
+            
+            <div class="space-y-4 pt-2 text-left">
+              <div>
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Tu nombre</label>
+                <input id="inputName" type="text" placeholder="Escribe tu nombre..." class="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400 font-semibold text-center text-slate-700 bg-white/90">
+              </div>
+
+              <div>
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Soy...</label>
+                <div class="grid grid-cols-2 gap-3">
+                  <button type="button" onclick="playClickSound(); selectGender('chico')" id="btnChico" class="py-3 rounded-2xl border-2 font-bold text-sm transition-all bg-sky-50 border-sky-400 text-sky-600">
+                    Chico 👦
+                  </button>
+                  <button type="button" onclick="playClickSound(); selectGender('chica')" id="btnChica" class="py-3 rounded-2xl border-2 font-bold text-sm transition-all bg-white border-slate-200 text-slate-600">
+                    Chica 👧
+                  </button>
+                </div>
+              </div>
+
+              <button onclick="playClickSound(); startCreatorQuiz()" class="w-full bg-gradient-to-r from-sky-400 to-blue-500 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-sky-200 active:scale-95 transition-transform mt-2">
+                Crear mi reto 🚀
+              </button>
+            </div>
+          </div>
+        `;
+            } else if (state.step === 'creator_quiz') {
+                const q = state.availableQuestions[state.currentQuestionIdx];
+                const answeredCount = Object.keys(state.creatorAnswers).length;
+                const formattedQuestion = q.question.replace('{nom}', state.userName);
+                app.innerHTML = `
+          <div class="glass-card p-5 rounded-3xl shadow-xl space-y-3">
+            <div class="flex items-center justify-between text-xs font-bold text-sky-600 bg-sky-100/70 px-3.5 py-1.5 rounded-full w-max">
+              Respondidas: ${answeredCount} de ${TARGET_QUESTIONS}
+            </div>
+            <h2 class="text-lg font-bold text-slate-800 leading-snug">${formattedQuestion}</h2>
+            
+            <div class="grid grid-cols-2 gap-2.5 pt-1 max-h-[58vh] overflow-y-auto pr-1">
+              ${q.options.map(opt => `
+                <button onclick="playClickSound(); selectCreatorAnswer(${q.id}, '${opt.id}')" class="group bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex flex-col items-center hover:border-sky-400 active:scale-95 transition-all text-center">
+                  <div class="w-14 h-14 ${opt.bg} rounded-2xl flex items-center justify-center text-3xl mb-2 shadow-inner group-hover:scale-110 transition-transform">
+                    ${opt.icon}
+                  </div>
+                  <span class="text-xs font-bold text-slate-700 leading-tight">${opt.label}</span>
+                </button>
+              `).join('')}
+            </div>
+
+            <div class="pt-2">
+              <button onclick="playClickSound(); skipCreatorQuestion()" class="w-full py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 font-bold text-xs active:scale-95 transition-all">
+                Saltar esta pregunta ⏭️
+              </button>
+            </div>
+          </div>
+        `;
+            } else if (state.step === 'share_dashboard') {
+                // PANTALLA IDÈNTICA A LA CAPTURA DE PANTALLA AMB TOTS ELS BOTONS SOCIALS
+                const shareLink = `${window.location.origin}${window.location.pathname}?id=${state.createdQuizId}`;
+                const encodedUrl = encodeURIComponent(shareLink);
+                const encodedMsg = encodeURIComponent(`¿Me vas a bloquear o me conoces de verdad? 👀 Descúbrelo aquí: ${shareLink}`);
+
+                app.innerHTML = `
+          <div class="glass-card p-6 rounded-3xl shadow-2xl text-center space-y-4">
+            
+            <!-- Capçalera divertida d'amistats falses -->
+            <div class="space-y-1">
+              <div class="text-4xl mb-1">🧸📱</div>
+              <h2 class="text-2xl font-black text-slate-800 leading-tight">
+                comparte tu <span class="text-sky-500 underline decoration-sky-300">enlace</span> 🔗<br/>
+                <span class="text-sm font-bold text-slate-400">— y —</span><br/>
+                descubre tus amistades <span class="bg-pink-100 text-pink-600 px-2 py-0.5 rounded-lg">falsas</span> 🎭
+              </h2>
+            </div>
+
+            <!-- Caixa d'enllaç per copiar -->
+            <div class="bg-white/80 border border-slate-200 rounded-2xl p-2 flex items-center justify-between shadow-inner">
+              <div class="flex items-center space-x-2 pl-2 overflow-hidden text-slate-500 text-xs">
+                <span>🔗</span>
+                <span class="truncate">${shareLink}</span>
+              </div>
+              <button onclick="playClickSound(); navigator.clipboard.writeText('${shareLink}'); alert('¡Enlace copiado!');" class="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold px-3 py-2 rounded-xl flex items-center space-x-1 shrink-0 active:scale-95 transition-transform">
+                <span>📋</span>
+                <span>Copiar</span>
+              </button>
+            </div>
+
+            <!-- Botó verd de WhatsApp -->
+            <a href="https://wa.me/?text=${encodedMsg}" target="_blank" onclick="playClickSound()" class="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-emerald-400 to-green-500 hover:from-emerald-500 hover:to-green-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-200 active:scale-95 transition-all text-base">
+              <span class="text-xl">💬</span>
+              <span>Compartir en WhatsApp</span>
+            </a>
+
+            <!-- Graella de xarxes socials -->
+            <div class="grid grid-cols-2 gap-2.5 pt-1">
+              <!-- Instagram -->
+              <a href="https://instagram.com" target="_blank" onclick="playClickSound()" class="bg-white border border-slate-100 hover:border-pink-300 p-3 rounded-2xl shadow-sm flex items-center space-x-2.5 active:scale-95 transition-all">
+                <span class="text-2xl">📸</span>
+                <span class="text-xs font-bold text-slate-700">Instagram</span>
+              </a>
+
+              <!-- Snapchat -->
+              <a href="https://snapchat.com" target="_blank" onclick="playClickSound()" class="bg-white border border-slate-100 hover:border-yellow-300 p-3 rounded-2xl shadow-sm flex items-center space-x-2.5 active:scale-95 transition-all">
+                <span class="text-2xl">👻</span>
+                <span class="text-xs font-bold text-slate-700">Snapchat</span>
+              </a>
+
+              <!-- Facebook -->
+              <a href="https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}" target="_blank" onclick="playClickSound()" class="bg-white border border-slate-100 hover:border-blue-300 p-3 rounded-2xl shadow-sm flex items-center space-x-2.5 active:scale-95 transition-all">
+                <span class="text-2xl">📘</span>
+                <span class="text-xs font-bold text-slate-700">Facebook</span>
+              </a>
+
+              <!-- Messenger -->
+              <a href="fb-messenger://share/?link=${encodedUrl}" target="_blank" onclick="playClickSound()" class="bg-white border border-slate-100 hover:border-sky-300 p-3 rounded-2xl shadow-sm flex items-center space-x-2.5 active:scale-95 transition-all">
+                <span class="text-2xl">⚡</span>
+                <span class="text-xs font-bold text-slate-700">Messenger</span>
+              </a>
+
+              <!-- Telegram -->
+              <a href="https://t.me/share/url?url=${encodedUrl}&text=${encodedMsg}" target="_blank" onclick="playClickSound()" class="bg-white border border-slate-100 hover:border-sky-300 p-3 rounded-2xl shadow-sm flex items-center space-x-2.5 active:scale-95 transition-all">
+                <span class="text-2xl">✈️</span>
+                <span class="text-xs font-bold text-slate-700">Telegram</span>
+              </a>
+
+              <!-- Otras apps -->
+              <button onclick="playClickSound(); shareNative('${shareLink}')" class="bg-white border border-slate-100 hover:border-slate-300 p-3 rounded-2xl shadow-sm flex items-center space-x-2.5 active:scale-95 transition-all">
+                <span class="text-2xl">🔗</span>
+                <span class="text-xs font-bold text-slate-700">Otras apps</span>
+              </button>
+            </div>
+
+            <!-- Botó blau destacat: Ver puntuaciones -->
+            <div class="pt-2">
+              <button onclick="playClickSound(); showScoreboard('${state.createdQuizId}', '${state.userName}')" class="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-black py-3.5 rounded-2xl shadow-lg shadow-sky-200 active:scale-95 transition-all flex items-center justify-center space-x-2">
+                <span class="text-lg">🏆</span>
+                <span>Ver puntuaciones</span>
+              </button>
+            </div>
+
+          </div>
+        `;
+            } else if (state.step === 'scoreboard') {
+                // PANTALLA DE RÀNQUING I PUNTUACIONS DELS AMICS
+                app.innerHTML = `
+          <div class="glass-card p-6 rounded-3xl shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div>
+                <h2 class="text-xl font-black text-slate-800">Puntuaciones 🏆</h2>
+                <p class="text-xs text-slate-400">Reto de ${state.userName}</p>
+              </div>
+              <button onclick="playClickSound(); state.step = 'share_dashboard'; render();" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-3 py-1.5 rounded-xl">
+                Volver
+              </button>
+            </div>
+
+            <div id="scoresList" class="space-y-2 max-h-72 overflow-y-auto">
+              <p class="text-xs text-slate-400 text-center py-4">Cargando respuestas...</p>
+            </div>
+
+            <div class="pt-2">
+              <button onclick="playClickSound(); loadScores('${state.createdQuizId}')" class="w-full py-2.5 text-xs font-bold bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 active:scale-95 transition-transform">
+                🔄 Actualizar lista
+              </button>
+            </div>
+          </div>
+        `;
+                loadScores(state.createdQuizId);
+            } else if (state.step === 'friend_intro') {
+                // ENTRADA PER A L'AMIC QUE REP EL WHATSAPP
+                app.innerHTML = `
+          <div class="glass-card p-6 rounded-3xl shadow-xl text-center space-y-5">
+            <div class="w-20 h-20 bg-pink-100 text-pink-500 rounded-2xl mx-auto flex items-center justify-center text-4xl">
+              👀
+            </div>
+            <h1 class="text-2xl font-black text-slate-800">¿Cuánto conoces a <span class="text-pink-500">${state.targetQuiz.creator_name}</span>?</h1>
+            <p class="text-xs text-slate-500">Responde a sus preguntas visuales y demuestra si eres un amigo de verdad o te va a bloquear.</p>
+            <div class="space-y-3 pt-2">
+              <input id="inputFriendName" type="text" placeholder="Tu nombre..." class="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pink-400 font-semibold text-center text-slate-700 bg-white/90">
+              <button onclick="playClickSound(); startFriendQuiz()" class="w-full bg-gradient-to-r from-pink-400 to-rose-500 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-pink-200 active:scale-95 transition-transform">Empezar el test 🎯</button>
+            </div>
+          </div>
+        `;
+            } else if (state.step === 'friend_quiz') {
+                const q = state.friendAnsweredQuestions[state.currentQuestionIdx];
+                const formattedQuestion = q.question.replace('{nom}', state.targetQuiz.creator_name);
+                app.innerHTML = `
+          <div class="glass-card p-5 rounded-3xl shadow-xl space-y-3">
+            <div class="text-xs font-bold text-pink-600 bg-pink-100 px-3.5 py-1.5 rounded-full w-max">
+              Pregunta ${state.currentQuestionIdx + 1} de ${state.friendAnsweredQuestions.length}
+            </div>
+            <h2 class="text-lg font-bold text-slate-800 leading-snug">${formattedQuestion}</h2>
+            
+            <div class="grid grid-cols-2 gap-2.5 pt-1 max-h-[58vh] overflow-y-auto pr-1">
+              ${q.options.map(opt => `
+                <button onclick="playClickSound(); selectFriendAnswer(${q.id}, '${opt.id}')" class="group bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex flex-col items-center hover:border-pink-400 active:scale-95 transition-all text-center">
+                  <div class="w-14 h-14 ${opt.bg} rounded-2xl flex items-center justify-center text-3xl mb-2 shadow-inner group-hover:scale-110 transition-transform">
+                    ${opt.icon}
+                  </div>
+                  <span class="text-xs font-bold text-slate-700 leading-tight">${opt.label}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+            } else if (state.step === 'result') {
+                // RESULTAT DE L'AMIC + BOTÓ PER FER EL SEU PROPI TEST
+                app.innerHTML = `
+          <div class="glass-card p-6 rounded-3xl shadow-xl text-center space-y-5">
+            <div class="text-5xl">🏆</div>
+            <h2 class="text-2xl font-black text-slate-800">¡Has sacado ${state.score} / ${state.friendAnsweredQuestions.length}!</h2>
+            <p class="text-xs text-slate-500">Tus respuestas y tu nota se han enviado automáticamente al ranking de ${state.targetQuiz.creator_name}.</p>
+            
+            <div class="pt-4 border-t border-slate-200/60 space-y-3">
+              <h3 class="text-base font-bold text-slate-800">¿Quieres retarle tú a él?</h3>
+              <p class="text-xs text-slate-400">Crea tu propio test para ver cuántas preguntas acierta sobre ti.</p>
+              <button onclick="playClickSound(); revengeQuiz()" class="w-full bg-gradient-to-r from-sky-400 to-blue-500 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-sky-200 active:scale-95 transition-transform">
+                Crear mi propio reto ⚔️
+              </button>
+            </div>
+          </div>
+        `;
+            }
+        }
+
+        function selectGender(gender) {
+            state.gender = gender;
+            const btnChico = document.getElementById('btnChico');
+            const btnChica = document.getElementById('btnChica');
+            if (gender === 'chico') {
+                btnChico.className = 'py-3 rounded-2xl border-2 font-bold text-sm transition-all bg-sky-50 border-sky-400 text-sky-600';
+                btnChica.className = 'py-3 rounded-2xl border-2 font-bold text-sm transition-all bg-white border-slate-200 text-slate-600';
+            } else {
+                btnChico.className = 'py-3 rounded-2xl border-2 font-bold text-sm transition-all bg-white border-slate-200 text-slate-600';
+                btnChica.className = 'py-3 rounded-2xl border-2 font-bold text-sm transition-all bg-pink-50 border-pink-400 text-pink-600';
+            }
+        }
+
+        function startCreatorQuiz() {
+            const name = document.getElementById('inputName').value.trim();
+            if (!name) return alert('Por favor, escribe tu nombre');
+            state.userName = name;
+            state.availableQuestions = shuffleArray(ALL_QUESTIONS);
+            state.currentQuestionIdx = 0;
+            state.creatorAnswers = {};
+            state.step = 'creator_quiz';
+            render();
+        }
+
+        function selectCreatorAnswer(questionId, optionId) {
+            state.creatorAnswers[questionId] = optionId;
+            evaluateNextCreatorQuestion();
+        }
+
+        function skipCreatorQuestion() {
+            evaluateNextCreatorQuestion();
+        }
+
+        function evaluateNextCreatorQuestion() {
+            const answeredCount = Object.keys(state.creatorAnswers).length;
+            if (answeredCount >= TARGET_QUESTIONS) {
+                finishCreatorQuiz();
+                return;
+            }
+
+            if (state.currentQuestionIdx + 1 < state.availableQuestions.length) {
+                state.currentQuestionIdx++;
+                render();
+            } else {
+                finishCreatorQuiz();
+            }
+        }
+
+        async function finishCreatorQuiz() {
+            app.innerHTML = `<div class="glass-card p-8 rounded-3xl text-center font-bold text-slate-600">Generando tu reto... ⏳</div>`;
+            const uniqueId = Math.random().toString(36).substring(2, 9);
+            state.createdQuizId = uniqueId;
+
+            const { error } = await db.from('quizzes').insert({
+                id: uniqueId,
+                creator_name: state.userName,
+                answers: state.creatorAnswers,
+                referred_by: refId || null
+            });
+
+            if (error) {
+                alert('Error al guardar: ' + error.message);
+                return;
+            }
+
+            state.step = 'share_dashboard';
+            render();
+        }
+
+        // Compartició nativa per a mòbils
+        function shareNative(url) {
+            if (navigator.share) {
+                navigator.share({
+                    title: `¿Cuánto conoces a ${state.userName}?`,
+                    text: `¿Me vas a bloquear o me conoces de verdad? 👀 Descúbrelo aquí:`,
+                    url: url
+                }).catch(() => { });
+            } else {
+                navigator.clipboard.writeText(url);
+                alert('Enlace copiado al portapapeles');
+            }
+        }
+
+        // Carregar puntuacions de la base de dades
+        async function showScoreboard(quizCode, creatorName) {
+            state.createdQuizId = quizCode;
+            state.userName = creatorName || state.userName;
+            state.step = 'scoreboard';
+            render();
+        }
+
+        async function loadScores(quizCode) {
+            const listEl = document.getElementById('scoresList');
+            if (!listEl) return;
+            listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Actualizando datos...</p>`;
+
+            const { data, error } = await db.from('responses').select('*').eq('quiz_id', quizCode).order('score', { ascending: false });
+
+            if (error || !data || data.length === 0) {
+                listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">Todavía ningún amigo ha completado tu test.<br/>¡Comparte el enlace por WhatsApp!</p>`;
+                return;
+            }
+
+            listEl.innerHTML = data.map((r, idx) => `
+        <div class="p-3 bg-white/90 border border-slate-100 rounded-2xl flex items-center justify-between shadow-sm">
+          <div class="flex items-center space-x-2.5">
+            <span class="text-sm font-black ${idx === 0 ? 'text-amber-500' : 'text-slate-400'}">#${idx + 1}</span>
+            <span class="text-xs font-bold text-slate-800">${r.friend_name}</span>
+          </div>
+          <span class="text-xs font-black bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full">
+            ${r.score} / ${r.total_questions}
+          </span>
+        </div>
+      `).join('');
+        }
+
+        function startFriendQuiz() {
+            const name = document.getElementById('inputFriendName').value.trim();
+            if (!name) return alert('Por favor, escribe tu nombre');
+            state.friendName = name;
+            state.currentQuestionIdx = 0;
+            state.step = 'friend_quiz';
+            render();
+        }
+
+        function selectFriendAnswer(questionId, optionId) {
+            state.friendAnswers[questionId] = optionId;
+            if (state.currentQuestionIdx + 1 < state.friendAnsweredQuestions.length) {
+                state.currentQuestionIdx++;
+                render();
+            } else {
+                finishFriendQuiz();
+            }
+        }
+
+        async function finishFriendQuiz() {
+            app.innerHTML = `<div class="glass-card p-8 rounded-3xl text-center font-bold text-slate-600">Calculando puntuación... ⏳</div>`;
+            let score = 0;
+            state.friendAnsweredQuestions.forEach(q => {
+                if (state.friendAnswers[q.id] === state.targetQuiz.answers[q.id]) {
+                    score++;
+                }
+            });
+            state.score = score;
+
+            await db.from('responses').insert({
+                quiz_id: state.targetQuiz.id,
+                friend_name: state.friendName,
+                score: score,
+                total_questions: state.friendAnsweredQuestions.length
+            });
+
+            state.step = 'result';
+            render();
+        }
+
+        function revengeQuiz() {
+            // Obre la creació del nou test guardant l'enllaç de referència de l'amic
+            window.location.href = `${window.location.origin}${window.location.pathname}?ref=${state.targetQuiz.id}`;
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
